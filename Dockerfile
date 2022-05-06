@@ -11,6 +11,7 @@ WORKDIR $APP_HOME
 COPY . ./
 
 # Install production dependencies.
+RUN apt-get -y install unixodbc-dev libsasl2-dev gcc python3-dev
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Microsoft ODBC 17 Driver and unixodbc for testing SQL Server samples
@@ -28,9 +29,7 @@ RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
   && source ~/.bashrc
 
 RUN apt-get update
-RUN apt-get -y install gcc
 RUN apt-get install build-essential
-RUN apt-get install python3-dev
 RUN apt-get install libxslt-dev libffi-dev libssl-dev
 
 
