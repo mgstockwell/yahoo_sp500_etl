@@ -23,7 +23,9 @@ RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
   && apt-get clean autoclean \
   && apt-get autoremove -y \
   && rm -rf /var/lib/apt/lists/* \
-  && rm -f /var/cache/apt/archives/*.deb
+  && rm -f /var/cache/apt/archives/*.deb \
+  && echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc \
+  && source ~/.bashrc
 
 # Run the web service on container startup. Here we use the gunicorn
 # webserver, with one worker process and 8 threads.

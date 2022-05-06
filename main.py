@@ -1,8 +1,8 @@
-import os
+import os, sys
 import yfinance
 import pyodbc
 from flask import Flask
-from getpass import getpass
+from getpass4 import getpass
 
 app = Flask(__name__)
 
@@ -56,4 +56,6 @@ def test_conn():
 
 
 if __name__ == "__main__":
+    sys.path.append("/opt/mssql-tools/bin")
+    sys.path.append("/opt/microsoft/msodbcsql17/lib64")
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
