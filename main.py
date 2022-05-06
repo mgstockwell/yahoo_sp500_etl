@@ -6,7 +6,7 @@ from getpass import getpass
 
 app = Flask(__name__)
 
-conn_string = os.environ.get("CLOUD_SQL_CREDENTIALS_SECRET")
+conn_string = os.environ.get("azure_conn_string")
 
 @app.route("/")
 def hello_world():
