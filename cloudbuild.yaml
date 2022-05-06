@@ -1,0 +1,19 @@
+steps:
+- id: bash
+  name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args: ['-c', 'echo "$$AZURE_CONN_STRING"']
+  secretEnv: ['AZURE_CONN_STRING']
+- id: setenv
+  name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args: ['-c', 'AZURE_CONN_STRING="$$AZURE_CONN_STRING"']
+  secretEnv: ['AZURE_CONN_STRING']
+- id: docker
+  name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '--build-arg', 'AZURE_CONN_STRING', '.']
+  secretEnv: ['AZURE_CONN_STRING']
+availableSecrets:
+  secretManager:
+  - versionName: projects/$PROJECT_ID/secrets/azure_conn_string/versions/latest
+    env: 'AZURE_CONN_STRING'
