@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, json
 import yfinance
 import pyodbc
 from flask import Flask
@@ -27,35 +27,32 @@ def test_conn():
         with conn.cursor() as cursor:
             cursor.execute("SELECT @@Version")
             row = cursor.fetchall()
-            print(row)
+            results = row
 
     # Drop previous table of same name if one exists
     cursor.execute("DROP TABLE IF EXISTS inventory;")
-    results = "Finished dropping table (if existed).\n"
+    results.append("Finished dropping table (if existed).\n")
 
     # Create table
     cursor.execute("""CREATE TABLE inventory (
                         id INT NOT NULL IDENTITY PRIMARY KEY, 
                         name VARCHAR(50), 
                         quantity INTEGER);""")
-    results = results + ("Finished creating table.\n")
+    results.append ("Finished creating table.\n")
 
     # Insert some data into table
     cursor.execute("INSERT INTO inventory (name, quantity) VALUES (?,?);", ("banana", 150))
-    results = results + "Inserted",cursor.rowcount,"row(s) of data.\n"
+    results.append("Inserted {} row(s) of data.\n".format(cursor.rowcount))
     cursor.execute("INSERT INTO inventory (name, quantity) VALUES (?,?);", ("orange", 154))
-    results = results + ("Inserted",cursor.rowcount,"row(s) of data.\n")
+    results.append("Inserted {} row(s) of data.\n".format(cursor.rowcount))
     cursor.execute("INSERT INTO inventory (name, quantity) VALUES (?,?);", ("apple", 100))
-    results = results + ("Inserted",cursor.rowcount,"row(s) of data.\n")
+    results.append("Inserted {} row(s) of data.\n".format(cursor.rowcount))
 
     # Cleanup
     conn.commit()
     cursor.close()
 
-    return results
-
+    return (str(results))
 
 if __name__ == "__main__":
-    sys.path.append("/opt/mssql-tools/bin")
-    sys.path.append("/opt/microsoft/msodbcsql17/lib64")
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
