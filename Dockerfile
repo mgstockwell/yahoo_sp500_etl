@@ -28,7 +28,9 @@ RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
   && source ~/.bashrc
 
 RUN apt-get -y install gcc
-RUN apt install build-essential
+RUN apt-get install build-essential
+RUN apt-get install python3-dev
+RUN apt-get install libxslt-dev libffi-dev libssl-dev
 RUN apt-get update
 
 # Run the web service on container startup. Here we use the gunicorn
