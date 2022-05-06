@@ -11,7 +11,8 @@ WORKDIR $APP_HOME
 COPY . ./
 
 # Install production dependencies.
-RUN apt-get -y install unixodbc-dev libsasl2-dev gcc python3-dev
+RUN apt-get update
+RUN apt-get -y install unixodbc-dev libsasl2-dev gcc g++ python3-dev gnupg2 curl
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Microsoft ODBC 17 Driver and unixodbc for testing SQL Server samples
@@ -24,13 +25,12 @@ RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
   && apt-get clean autoclean \
   && apt-get autoremove -y \
   && rm -rf /var/lib/apt/lists/* \
-  && rm -f /var/cache/apt/archives/*.deb \
-  && echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc \
-  && source ~/.bashrc
-
+  && rm -f /var/cache/apt/archives/*.deb 
+RUN export PATH="$PATH:/opt/mssql-tools/bin"
+RUN echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc 
 RUN apt-get update
-RUN apt-get install build-essential
-RUN apt-get install libxslt-dev libffi-dev libssl-dev
+RUN apt-get upgrade -y
+RUN apt-get install libxslt-dev libffi-dev libssl-dev -y
 
 
 # Run the web service on container startup. Here we use the gunicorn

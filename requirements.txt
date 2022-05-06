@@ -4,3 +4,4 @@ yfinance
 pyodbc
 pandas
 getpass4
+matplotlib

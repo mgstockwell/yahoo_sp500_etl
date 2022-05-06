@@ -1,4 +1,5 @@
 import os, sys, json
+from matplotlib.font_manager import json_dump
 import yfinance
 import pyodbc
 from flask import Flask
@@ -6,12 +7,16 @@ from getpass4 import getpass
 
 app = Flask(__name__)
 
-conn_string = os.environ.get("azure_conn_string")
+conn_string = os.environ.get("AZURE_CONN_STRING")
 
 @app.route("/")
 def hello_world():
     name = os.environ.get("NAME", "World")
     return "Hello {}!".format(name)
+
+@app.route("/env")
+def dump_env():
+    return json.dumps(dict(os.environ),indent=2)
 
 @app.route("/test_conn")
 def test_conn():
