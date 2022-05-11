@@ -138,9 +138,12 @@ def load_ticker_info():
             df["longBusinessSummary"] = df["longBusinessSummary"].str.slice(0, 250)
         except BaseException as err:
             print(f"Unexpected {err}, {type(err)} on {t} in load_ticker_info")
+            continue
             
         df.index.names = ['ticker']
         df = df.convert_dtypes()
+        df.to_csv('tmp.csv')
+        df = pd.read_csv('tmp.csv')
         load_from_df('ticker_info', df)
         return 'Finished ' + t + ' at ' + str(datetime.datetime.now())
 
