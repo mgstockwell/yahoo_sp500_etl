@@ -1,6 +1,6 @@
 # Use the official lightweight Python image.
 # https://hub.docker.com/_/python
-FROM python:3.10-slim
+FROM python:3.8.3
 
 # Allow statements and log messages to immediately appear in the Knative logs
 ENV PYTHONUNBUFFERED True
@@ -11,17 +11,23 @@ WORKDIR $APP_HOME
 COPY . ./
 
 # Install production dependencies.
+RUN pip install --upgrade pip
 RUN apt-get update
-RUN apt-get -y install unixodbc-dev libsasl2-dev gcc g++ python3-dev gnupg2 curl
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get upgrade -y
+RUN apt-get -y install libsasl2-dev gcc g++ python3-dev gnupg2 curl libiodbc2-dev
+RUN apt install unixodbc-dev --yes
+RUN pip install yfinance
+RUN pip3 install pyodbc
+RUN pip3 install --no-cache-dir -r requirements.txt
+#RUN wget http://archive.ubuntu.com/ubuntu/pool/main/g/glibc/multiarch-support_2.27-3ubuntu1.4_amd64.deb
+#RUN apt-get install ./multiarch-support_2.27-3ubuntu1.4_amd64.deb
 
-# Install Microsoft ODBC 17 Driver and unixodbc for testing SQL Server samples
+# Install Microsoft ODBC 17/18 Driver and unixodbc for testing SQL Server samples
 RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
   && curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list > /etc/apt/sources.list.d/mssql-release.list \
   && apt-get update \
-  && ACCEPT_EULA=Y apt-get install -y --no-install-recommends \
-    msodbcsql17 \
-    unixodbc-dev \
+  && ACCEPT_EULA=Y apt-get install -y  \
+    mssql-tools msodbcsql17 msodbcsql18 mssql-tools18 \
   && apt-get clean autoclean \
   && apt-get autoremove -y \
   && rm -rf /var/lib/apt/lists/* \
@@ -29,8 +35,8 @@ RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
 RUN export PATH="$PATH:/opt/mssql-tools/bin"
 RUN echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc 
 RUN apt-get update
-RUN apt-get upgrade -y
 RUN apt-get install libxslt-dev libffi-dev libssl-dev -y
+RUN apt-get upgrade -y
 
 
 # Run the web service on container startup. Here we use the gunicorn
