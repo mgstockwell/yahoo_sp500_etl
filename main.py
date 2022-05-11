@@ -7,7 +7,7 @@ import pandas as pd
 from matplotlib.font_manager import json_dump
 import yfinance as yf
 import pyodbc
-from flask import Flask, request
+from flask import Flask, request, Response, stream_with_context
 from getpass4 import getpass
 
 app = Flask(__name__)
@@ -76,7 +76,7 @@ def load_from_df(sql_table_name, df: pd.DataFrame):
     finally:
         cursor.close()
     
-    return 'Completed load_ticker_info ' + str(datetime.datetime.now())
+    return 'Completed load_ticker_info ' + df["ticker"][0] + str(datetime.datetime.now())
 
 @app.route("/")
 def hello_world():
@@ -145,7 +145,8 @@ def load_ticker_info():
         df.to_csv('tmp.csv')
         df = pd.read_csv('tmp.csv')
         load_from_df('ticker_info', df)
-        return 'Finished ' + t + ' at ' + str(datetime.datetime.now())
+
+    return '\nFinished ' + str(args) + ' at ' + str(datetime.datetime.now())
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
