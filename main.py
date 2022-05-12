@@ -1,6 +1,7 @@
 from ast import arg
 import os, sys, json
 from posixpath import split
+from click import open_file
 import requests
 import datetime
 import pandas as pd
@@ -78,10 +79,58 @@ def load_from_df(sql_table_name, df: pd.DataFrame):
     
     return 'Completed load_ticker_info ' + df["ticker"][0] + str(datetime.datetime.now())
 
+def merge_price_history():
+    '''copies data from tmp table to main table, only if not already present
+    '''
+    # create cursor and set fast execute property
+    cursor = connect_db()
+
+    # insert all the rows from tmp table that are not in main table.
+    qry = f'''INSERT [dbo].[price_history]
+        SELECT tmp.*
+        FROM [dbo].[price_history_tmp] tmp
+        LEFT OUTER JOIN [dbo].[price_history] ph
+            ON tmp.ticker=ph.ticker and tmp.[Datetime]=ph.[Datetime] 
+        WHERE ph.ticker is null'''
+    cursor.execute(qry)
+    row = cursor.fetchone()
+    result = str(row[0])
+
+    print('  merge_price_history:' + str(result))
+
+def delete_table(sql_table_name, where_clause):
+    '''deletes rows from a table using supplied WHERE clause
+    '''
+    # create cursor, execute the stmnt
+    cursor = connect_db()
+    qry = f'''DELETE {sql_table_name} {where_clause} '''
+    cursor.execute(qry)
+    row = cursor.fetchone()
+    result = str(row[0])
+    cursor.commit()
+
+    print(f'  truncated table {sql_table_name}:' + str(result))
+
+def truncate_table(sql_table_name):
+    '''truncates a table, obviously
+    '''
+    # create cursor, execute the stmnt
+    cursor = connect_db()
+    qry = f'''TRUNCATE TABLE {sql_table_name} '''
+    cursor.execute(qry)
+    row = cursor.fetchone()
+    result = str(row[0])
+
+    print(f'  truncated table {sql_table_name}:' + str(result))
+
 @app.route("/")
 def hello_world():
     name = os.environ.get("NAME", "World")
     return "Hello {}!".format(name)
+
+@app.route("/readme", methods=['GET'])
+def load_ticker_info():
+    return open_file('README.md').readlines()
 
 @app.route("/env")
 def dump_env():
@@ -145,6 +194,37 @@ def load_ticker_info():
         df.to_csv('tmp.csv')
         df = pd.read_csv('tmp.csv')
         load_from_df('ticker_info', df)
+
+    return '\nFinished ' + str(args) + ' at ' + str(datetime.datetime.now())
+
+@app.route("/load_price_history", methods=['GET'])
+def load_price_history():
+    # Get data from query strings
+    args = request.args.to_dict()
+    tickers = args.get("ticker").split("|")
+    print("args:" + str(args))
+
+    where_clause =  str(tickers).replace("[","").replace("]",""))
+    where_clause = f"WHERE ticker in ({where_clause})" 
+    delete_table('price_history', where_clause)
+
+    # load the tmp table, then compare to main table and insert the new rows
+    for t in tickers:
+        # ticker info
+        try:
+            data = yf.download(t, period="1mo", interval="5m", auto_adjust=True)
+            df = pd.DataFrame.from_dict(data)
+        except BaseException as err:
+            print(f"Unexpected {err}, {type(err)} on {t} in load_price_history")
+            
+        df['ticker']= t
+        df = df.convert_dtypes()
+        # dumping to csv and reloading seems to solve many problems
+        #df.to_csv('tmp.csv')
+        #df = pd.read_csv('tmp.csv')
+        load_from_df('price_history_tmp', df)
+    
+    merge_price_history()
 
     return '\nFinished ' + str(args) + ' at ' + str(datetime.datetime.now())
 
