@@ -1,4 +1,5 @@
 Flask
+markdown
 gunicorn
 yfinance
 pyodbc

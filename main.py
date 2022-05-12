@@ -1,15 +1,11 @@
 from ast import arg
 import os, sys, json
-from posixpath import split
-from click import open_file
-import requests
 import datetime
 import pandas as pd
-from matplotlib.font_manager import json_dump
 import yfinance as yf
 import pyodbc
-from flask import Flask, request, Response, stream_with_context
-from getpass4 import getpass
+import markdown
+from flask import Flask, request, Response
 
 app = Flask(__name__)
 
@@ -93,10 +89,10 @@ def merge_price_history():
             ON tmp.ticker=ph.ticker and tmp.[Datetime]=ph.[Datetime] 
         WHERE ph.ticker is null'''
     cursor.execute(qry)
-    row = cursor.fetchone()
-    result = str(row[0])
+    rowcount = cursor.rowcount
+    cursor.commit()
 
-    print('  merge_price_history:' + str(result))
+    (f' {rowcount} rows inserted to price_history')
 
 def delete_table(sql_table_name, where_clause):
     '''deletes rows from a table using supplied WHERE clause
@@ -105,11 +101,10 @@ def delete_table(sql_table_name, where_clause):
     cursor = connect_db()
     qry = f'''DELETE {sql_table_name} {where_clause} '''
     cursor.execute(qry)
-    row = cursor.fetchone()
-    result = str(row[0])
+    rowcount = cursor.rowcount
     cursor.commit()
 
-    print(f'  truncated table {sql_table_name}:' + str(result))
+    print(f' {rowcount} rows deleted from {sql_table_name}:')
 
 def truncate_table(sql_table_name):
     '''truncates a table, obviously
@@ -129,8 +124,11 @@ def hello_world():
     return "Hello {}!".format(name)
 
 @app.route("/readme", methods=['GET'])
-def load_ticker_info():
-    return open_file('README.md').readlines()
+def readme():
+    md_template_string = markdown.markdown(
+        open('README.md',mode='r').read(), extensions=["fenced_code"]
+    )
+    return md_template_string
 
 @app.route("/env")
 def dump_env():
@@ -204,7 +202,7 @@ def load_price_history():
     tickers = args.get("ticker").split("|")
     print("args:" + str(args))
 
-    where_clause =  str(tickers).replace("[","").replace("]",""))
+    where_clause =  str(tickers).replace("[","").replace("]","")
     where_clause = f"WHERE ticker in ({where_clause})" 
     delete_table('price_history', where_clause)
 
@@ -219,6 +217,7 @@ def load_price_history():
             
         df['ticker']= t
         df = df.convert_dtypes()
+        df = df.reset_index()
         # dumping to csv and reloading seems to solve many problems
         #df.to_csv('tmp.csv')
         #df = pd.read_csv('tmp.csv')
