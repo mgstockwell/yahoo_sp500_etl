@@ -4,7 +4,7 @@ select
 	CONCAT('refresh_price_history_', bucket,'_', min(t.Symbol), '-', max(t.Symbol)) job_name,
 	CONCAT(' --location ', 'us-central1 ') loc,
 	CONCAT(' --time-zone ', '"America/New_York" ')tz,
-	CONCAT(' --schedule ', ' "1/5 9-17 * * 1-5" ') sched,
+	CONCAT(' --schedule ', ' "*/5 9-17 * * 1-5" ') sched,
 	CONCAT(' --http-method ', 'GET') method,
 	CONCAT('--uri "', 'https://yahoosp500etl-vlw6tjp5aa-uc.a.run.app/load_price_history?ticker=', STRING_AGG(Symbol , '|'), '"' ) uri, 
 	count(*)

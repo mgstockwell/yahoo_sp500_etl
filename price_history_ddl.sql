@@ -22,3 +22,11 @@ CREATE TABLE stock_trading.dbo.price_history_tmp (
 	ticker varchar(4)  NOT NULL,
 	CONSTRAINT PK__price_history_tmp PRIMARY KEY ([Datetime], ticker)
 );
+
+CREATE NONCLUSTERED INDEX nci_wi_price_history_ ON dbo.price_history (  Datetime ASC  , ticker ASC  )  
+	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
+	 ON [PRIMARY ] ;
+
+CREATE NONCLUSTERED INDEX nci_wi_price_history_tmp ON dbo.price_history_tmp (  Datetime ASC  , ticker ASC  )  
+	 WITH (  PAD_INDEX = OFF ,FILLFACTOR = 100  ,SORT_IN_TEMPDB = OFF , IGNORE_DUP_KEY = OFF , STATISTICS_NORECOMPUTE = OFF , ONLINE = OFF , ALLOW_ROW_LOCKS = ON , ALLOW_PAGE_LOCKS = ON  )
+	 ON [PRIMARY ] ;

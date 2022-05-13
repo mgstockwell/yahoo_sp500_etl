@@ -28,11 +28,11 @@ def list_sp500():
     df_sp500 = first_table.convert_dtypes()
     return df_sp500
 
-def load_from_df(sql_table_name, df: pd.DataFrame):
+def load_from_df(sql_table_name, data: pd.DataFrame):
     '''Loads data to SQL server from dataframe
     '''
-    if df.shape[0] ==0: return f"no data in df to load"
-    df = df.fillna('0')
+    if data.shape[0] ==0: return f"no data in df to load"
+    df = data.fillna('0')
 
     # create cursor and set fast execute property
     cursor = connect_db()
@@ -212,6 +212,7 @@ def load_price_history():
     # some options here https://stackoverflow.com/questions/63107594/
     # how-to-deal-with-multi-level-column-names-downloaded-with-yfinance/63107801#63107801
     for t in tickers:
+        df = pd.DataFrame()
         # ticker info
         try:
             data = yf.download(t, period="5d", interval="5m", auto_adjust=True)
@@ -222,10 +223,7 @@ def load_price_history():
         df['ticker']= t
         df = df.convert_dtypes()
         df.reset_index(inplace=True)
-        # dumping to csv and reloading seems to solve many problems
-        #df.to_csv('tmp.csv')
-        #df = pd.read_csv('tmp.csv')
-        load_from_df('price_history_tmp', df)
+        load_from_df('price_history_tmp', df.copy(deep=True))
     
     merge_price_history()
     delete_table('price_history_tmp', where_clause)
