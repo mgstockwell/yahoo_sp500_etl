@@ -31,9 +31,8 @@ def list_sp500():
 def load_from_df(sql_table_name, df: pd.DataFrame):
     '''Loads data to SQL server from dataframe
     '''
-    df = df.fillna(0)
-    df.index.names = ['ticker']
-    df.convert_dtypes()
+    if df.shape[0] ==0: return f"no data in df to load"
+    df = df.fillna('0')
 
     # create cursor and set fast execute property
     cursor = connect_db()
@@ -66,11 +65,12 @@ def load_from_df(sql_table_name, df: pd.DataFrame):
     # insert rows
     try:
         cursor.executemany(insert_tbl_stmt, df.values.tolist())
-        cursor.commit()
         print(f'   {len(df)} rows inserted into {sql_table_name} table', datetime.datetime.now())
     except BaseException as err:
-        print(f"   Unexpected {err}, {type(err)}")
+        print(f"   Unexpected {err}, {type(err)} in load_from_df")
+        print(f"   Error on df values", str(df.head(1)))
     finally:
+        cursor.commit()
         cursor.close()
     
     return 'Completed load_ticker_info ' + df["ticker"][0] + str(datetime.datetime.now())
@@ -117,6 +117,8 @@ def truncate_table(sql_table_name):
     result = str(row[0])
 
     print(f'  truncated table {sql_table_name}:' + str(result))
+
+################################################################ APP ROUTES START HERE
 
 @app.route("/")
 def hello_world():
@@ -204,26 +206,29 @@ def load_price_history():
 
     where_clause =  str(tickers).replace("[","").replace("]","")
     where_clause = f"WHERE ticker in ({where_clause})" 
-    delete_table('price_history', where_clause)
+    delete_table('price_history_tmp', where_clause)
 
     # load the tmp table, then compare to main table and insert the new rows
+    # some options here https://stackoverflow.com/questions/63107594/
+    # how-to-deal-with-multi-level-column-names-downloaded-with-yfinance/63107801#63107801
     for t in tickers:
         # ticker info
         try:
-            data = yf.download(t, period="1mo", interval="5m", auto_adjust=True)
+            data = yf.download(t, period="5d", interval="5m", auto_adjust=True)
             df = pd.DataFrame.from_dict(data)
         except BaseException as err:
             print(f"Unexpected {err}, {type(err)} on {t} in load_price_history")
             
         df['ticker']= t
         df = df.convert_dtypes()
-        df = df.reset_index()
+        df.reset_index(inplace=True)
         # dumping to csv and reloading seems to solve many problems
         #df.to_csv('tmp.csv')
         #df = pd.read_csv('tmp.csv')
         load_from_df('price_history_tmp', df)
     
     merge_price_history()
+    delete_table('price_history_tmp', where_clause)
 
     return '\nFinished ' + str(args) + ' at ' + str(datetime.datetime.now())
 
