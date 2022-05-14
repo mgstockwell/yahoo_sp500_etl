@@ -1,4 +1,5 @@
 from ast import arg
+from io import StringIO
 import os, sys, json
 import datetime
 import pandas as pd
@@ -72,8 +73,9 @@ def load_from_df(sql_table_name, data: pd.DataFrame):
     finally:
         cursor.commit()
         cursor.close()
+    del df
     
-    return 'Completed load_ticker_info ' + df["ticker"][0] + str(datetime.datetime.now())
+    return f'Completed {sql_table_name} ' + df["ticker"][0] + str(datetime.datetime.now())
 
 def merge_price_history():
     '''copies data from tmp table to main table, only if not already present
@@ -105,6 +107,23 @@ def delete_table(sql_table_name, where_clause):
     cursor.commit()
 
     print(f' {rowcount} rows deleted from {sql_table_name}:')
+
+def dump_table_to_stream(table='INFORMATION_SCHEMA.COLUMNS', where='WHERE TRUE', format='csv'):
+    '''returns all data in table with optional where clause
+    '''
+    print( table, where, format)
+    # create cursor, execute the stmnt
+    conn = pyodbc.connect(conn_string)
+    qry = f'''select * FROM {table} {where} '''
+    sql_query = pd.read_sql_query(qry, conn)
+
+    df = pd.DataFrame(sql_query)
+    if (format=='json'):
+        return df.to_json(index=False, orient='split')
+    else:
+        return df.to_csv(index=False, header=True)
+
+    del df
 
 def truncate_table(sql_table_name):
     '''truncates a table, obviously
@@ -194,6 +213,7 @@ def load_ticker_info():
         df.to_csv('tmp.csv')
         df = pd.read_csv('tmp.csv')
         load_from_df('ticker_info', df)
+        del df
 
     return '\nFinished ' + str(args) + ' at ' + str(datetime.datetime.now())
 
@@ -224,11 +244,29 @@ def load_price_history():
         df = df.convert_dtypes()
         df.reset_index(inplace=True)
         load_from_df('price_history_tmp', df.copy(deep=True))
+        del df
     
     merge_price_history()
     delete_table('price_history_tmp', where_clause)
 
     return '\nFinished ' + str(args) + ' at ' + str(datetime.datetime.now())
+
+@app.route("/dump_table", methods=['GET'])
+def dump_table():
+    # Get data from query strings
+    args = request.args.to_dict()
+    print("GET /dump_table?args:" + str(args))
+    table, where, format = args.get("table"), args.get("where"), args.get("format")
+    if table==None: table='INFORMATION_SCHEMA.COLUMNS'
+    if where==None: where='WHERE 1=1'
+    if format==None: format='csv'
+    table_data = dump_table_to_stream(table=table, where=where, format=format)
+    if (format=='csv'):
+        return Response(str(table_data), mimetype='text/csv')
+    elif (format=='json'):
+        return Response(str(table_data), mimetype='application/json')
+    else:
+        return "ERROR: format parameter mustbe either csv or json"
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
