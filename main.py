@@ -1,8 +1,10 @@
 from ast import arg
 from io import StringIO
 import os, sys, json, gc
-import datetime
+from random import Random
+import datetime, time
 import pandas as pd
+from scipy import rand
 import yfinance as yf
 import pyodbc
 import markdown
@@ -35,7 +37,7 @@ def load_from_df(sql_table_name, data: pd.DataFrame):
     '''Loads data to SQL server from dataframe
     '''
     if data.shape[0] ==0: return f"no data in df to load"
-    df = data.copy()
+    df = data.copy(deep=True)
     df = df.fillna('0')
 
     # create cursor and set fast execute property
@@ -55,10 +57,10 @@ def load_from_df(sql_table_name, data: pd.DataFrame):
 
     # select columns from dataframe that are in the sql table
     common_cols = set(col_list) & set(df.columns.to_list())
-    print('COMMON COLS:',common_cols)
+    print('  COMMON COLS:', list(common_cols))
     col_count = len(common_cols)
-    df = df[common_cols]
-    ticker = df["ticker"][0]
+    df = df[list(common_cols)]
+    print('   First Row of Dataframe:', dict(df.iloc[0]))
 
     # vals is list of question marks for each column for insert stmnt
     vals = ('?,' *(col_count -1) ) + '?'
@@ -77,9 +79,10 @@ def load_from_df(sql_table_name, data: pd.DataFrame):
     finally:
         cursor.commit()
         cursor.close()
-    del df
-    
-    return f'Completed {sql_table_name} ' + ticker + str(datetime.datetime.now())
+        del df
+    gc.collect()
+
+    return f'Completed loading {sql_table_name} ' + str(datetime.datetime.now())
 
 def merge_price_history():
     '''copies data from tmp table to main table, only if not already present
@@ -218,9 +221,12 @@ def load_ticker_info():
         df.index.names = ['ticker']
         df = df.copy()
         df = df.convert_dtypes()
-        df.to_csv('tmp.csv')
-        df = pd.read_csv('tmp.csv')
+        # this dump to csv cleans up some formatting problems
+        fname = f'{time.time_ns()}_tmp.csv'
+        df.to_csv(fname)
+        df = pd.read_csv(fname)
         load_from_df('ticker_info', df.copy(deep=True))
+        os.remove(fname)
         del df
 
     gc.collect()
@@ -244,16 +250,15 @@ def load_price_history():
         df = pd.DataFrame()
         # ticker info
         try:
-            data = yf.download(t, period="1mo", interval="5m", auto_adjust=True)
-            df = pd.DataFrame.from_dict(data)
+            df = yf.download(t, period="1mo", interval="5m", auto_adjust=True)
         except BaseException as err:
             print(f"Unexpected {err}, {type(err)} on {t} in load_price_history")
             
         df['ticker']= t
-        df = df.convert_dtypes()
         df.reset_index(inplace=True)
-        load_from_df('price_history_tmp', df.copy(deep=True))
+        load_from_df('price_history_tmp', df)
         del df
+        gc.collect()
     
     merge_price_history()
     delete_table('price_history_tmp', where_clause)
