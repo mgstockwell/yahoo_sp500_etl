@@ -1,14 +1,10 @@
-from ast import arg
-from io import StringIO
 import os, sys, json, gc
-from random import Random
 import datetime, time
 import pandas as pd
-from scipy import rand
 import yfinance as yf
 import pyodbc
 import markdown
-from flask import Flask, request, Response
+from flask import Flask, Response, request
 
 gc.enable()
 
@@ -84,7 +80,7 @@ def load_from_df(sql_table_name, data: pd.DataFrame):
 
     return f'Completed loading {sql_table_name} ' + str(datetime.datetime.now())
 
-def merge_price_history():
+def merge_price_history(where_clause):
     '''copies data from tmp table to main table, only if not already present
     '''
     # create cursor and set fast execute property
@@ -92,11 +88,11 @@ def merge_price_history():
 
     # insert all the rows from tmp table that are not in main table.
     qry = f'''INSERT [dbo].[price_history]
-        SELECT tmp.*
-        FROM [dbo].[price_history_tmp] tmp
+        SELECT price_history_tmp.*
+        FROM [dbo].[price_history_tmp] price_history_tmp
         LEFT OUTER JOIN [dbo].[price_history] ph
-            ON tmp.ticker=ph.ticker and tmp.[Datetime]=ph.[Datetime] 
-        WHERE ph.ticker is null'''
+            ON price_history_tmp.ticker=ph.ticker and price_history_tmp.[Datetime]=ph.[Datetime] 
+        {where_clause} and ph.ticker is null'''
     cursor.execute(qry)
     rowcount = cursor.rowcount
     cursor.commit()
@@ -240,7 +236,7 @@ def load_price_history():
     print("args:" + str(args))
 
     where_clause =  str(tickers).replace("[","").replace("]","")
-    where_clause = f"WHERE ticker in ({where_clause})" 
+    where_clause = f"WHERE price_history_tmp.ticker in ({where_clause})" 
     delete_table('price_history_tmp', where_clause)
 
     # load the tmp table, then compare to main table and insert the new rows
@@ -260,7 +256,7 @@ def load_price_history():
         del df
         gc.collect()
     
-    merge_price_history()
+    merge_price_history(where_clause)
     delete_table('price_history_tmp', where_clause)
 
     gc.collect()
