@@ -1,12 +1,14 @@
 from ast import arg
 from io import StringIO
-import os, sys, json
+import os, sys, json, gc
 import datetime
 import pandas as pd
 import yfinance as yf
 import pyodbc
 import markdown
 from flask import Flask, request, Response
+
+gc.enable()
 
 app = Flask(__name__)
 
@@ -33,7 +35,8 @@ def load_from_df(sql_table_name, data: pd.DataFrame):
     '''Loads data to SQL server from dataframe
     '''
     if data.shape[0] ==0: return f"no data in df to load"
-    df = data.fillna('0')
+    df = data.copy()
+    df = df.fillna('0')
 
     # create cursor and set fast execute property
     cursor = connect_db()
@@ -55,6 +58,7 @@ def load_from_df(sql_table_name, data: pd.DataFrame):
     print('COMMON COLS:',common_cols)
     col_count = len(common_cols)
     df = df[common_cols]
+    ticker = df["ticker"][0]
 
     # vals is list of question marks for each column for insert stmnt
     vals = ('?,' *(col_count -1) ) + '?'
@@ -75,7 +79,7 @@ def load_from_df(sql_table_name, data: pd.DataFrame):
         cursor.close()
     del df
     
-    return f'Completed {sql_table_name} ' + df["ticker"][0] + str(datetime.datetime.now())
+    return f'Completed {sql_table_name} ' + ticker + str(datetime.datetime.now())
 
 def merge_price_history():
     '''copies data from tmp table to main table, only if not already present
@@ -93,8 +97,9 @@ def merge_price_history():
     cursor.execute(qry)
     rowcount = cursor.rowcount
     cursor.commit()
+    cursor.close()
 
-    (f' {rowcount} rows inserted to price_history')
+    print(f' {rowcount} rows inserted to price_history')
 
 def delete_table(sql_table_name, where_clause):
     '''deletes rows from a table using supplied WHERE clause
@@ -105,6 +110,7 @@ def delete_table(sql_table_name, where_clause):
     cursor.execute(qry)
     rowcount = cursor.rowcount
     cursor.commit()
+    cursor.close()
 
     print(f' {rowcount} rows deleted from {sql_table_name}:')
 
@@ -122,8 +128,6 @@ def dump_table_to_stream(table='INFORMATION_SCHEMA.COLUMNS', where='WHERE TRUE',
         return df.to_json(index=False, orient='split')
     else:
         return df.to_csv(index=False, header=True)
-
-    del df
 
 def truncate_table(sql_table_name):
     '''truncates a table, obviously
@@ -153,7 +157,10 @@ def readme():
 
 @app.route("/env")
 def dump_env():
-    return json.dumps(dict(os.environ),indent=2)
+    try:
+        return json.dumps(dict(os.environ),indent=2)
+    finally:
+        gc.collect()
 
 @app.route("/test_conn")
 def test_conn():
@@ -209,12 +216,14 @@ def load_ticker_info():
             continue
             
         df.index.names = ['ticker']
+        df = df.copy()
         df = df.convert_dtypes()
         df.to_csv('tmp.csv')
         df = pd.read_csv('tmp.csv')
-        load_from_df('ticker_info', df)
+        load_from_df('ticker_info', df.copy(deep=True))
         del df
 
+    gc.collect()
     return '\nFinished ' + str(args) + ' at ' + str(datetime.datetime.now())
 
 @app.route("/load_price_history", methods=['GET'])
@@ -235,7 +244,7 @@ def load_price_history():
         df = pd.DataFrame()
         # ticker info
         try:
-            data = yf.download(t, period="5d", interval="5m", auto_adjust=True)
+            data = yf.download(t, period="1mo", interval="5m", auto_adjust=True)
             df = pd.DataFrame.from_dict(data)
         except BaseException as err:
             print(f"Unexpected {err}, {type(err)} on {t} in load_price_history")
@@ -249,6 +258,7 @@ def load_price_history():
     merge_price_history()
     delete_table('price_history_tmp', where_clause)
 
+    gc.collect()
     return '\nFinished ' + str(args) + ' at ' + str(datetime.datetime.now())
 
 @app.route("/dump_table", methods=['GET'])
