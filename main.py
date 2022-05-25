@@ -237,7 +237,7 @@ def load_price_history():
     args = request.args.to_dict()
     tickers = args.get("ticker").split("|")
     print("args:" + str(args))
-    print("tickers:" + str(tickers)
+    print("tickers:" + str(tickers))
 
     where_clause =  str(tickers).replace("[","").replace("]","")
     where_clause = f"WHERE price_history_tmp.ticker in ({where_clause})" 
