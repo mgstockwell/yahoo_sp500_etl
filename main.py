@@ -1,5 +1,7 @@
+from copy import deepcopy
 import os, sys, json, gc
 import datetime, time
+from datetime import date
 import pandas as pd
 import yfinance as yf
 import pyodbc
@@ -55,7 +57,7 @@ def load_from_df(sql_table_name, data: pd.DataFrame):
     common_cols = set(col_list) & set(df.columns.to_list())
     print('  COMMON COLS:', list(common_cols))
     col_count = len(common_cols)
-    df = df[list(common_cols)]
+    df2 = df[list(common_cols)]
     print('   First Row of Dataframe:', dict(df.iloc[0]))
 
     # vals is list of question marks for each column for insert stmnt
@@ -67,15 +69,15 @@ def load_from_df(sql_table_name, data: pd.DataFrame):
 
     # insert rows
     try:
-        cursor.executemany(insert_tbl_stmt, df.values.tolist())
-        print(f'   {len(df)} rows inserted into {sql_table_name} table', datetime.datetime.now())
+        cursor.executemany(insert_tbl_stmt, df2.values.tolist())
+        print(f'   {len(df2)} rows inserted into {sql_table_name} table', datetime.datetime.now())
     except BaseException as err:
         print(f"   Unexpected {err}, {type(err)} in load_from_df")
-        print(f"   Error on df values", str(df.head(1)))
+        print(f"   Error on df values", str(df2.head(1)))
     finally:
         cursor.commit()
         cursor.close()
-        del df
+        del df, df2
     gc.collect()
 
     return f'Completed loading {sql_table_name} ' + str(datetime.datetime.now())
@@ -92,7 +94,8 @@ def merge_price_history(where_clause):
         FROM [dbo].[price_history_tmp] price_history_tmp
         LEFT OUTER JOIN [dbo].[price_history] ph
             ON price_history_tmp.ticker=ph.ticker and price_history_tmp.[Datetime]=ph.[Datetime] 
-        {where_clause} and ph.ticker is null'''
+        {where_clause} and ph.ticker is null and price_history_tmp.Volume>0'''
+    print('  merge_price_history query: ', qry)
     cursor.execute(qry)
     rowcount = cursor.rowcount
     cursor.commit()
@@ -234,6 +237,7 @@ def load_price_history():
     args = request.args.to_dict()
     tickers = args.get("ticker").split("|")
     print("args:" + str(args))
+    print("tickers:" + str(tickers)
 
     where_clause =  str(tickers).replace("[","").replace("]","")
     where_clause = f"WHERE price_history_tmp.ticker in ({where_clause})" 
@@ -243,16 +247,36 @@ def load_price_history():
     # some options here https://stackoverflow.com/questions/63107594/
     # how-to-deal-with-multi-level-column-names-downloaded-with-yfinance/63107801#63107801
     for t in tickers:
-        df = pd.DataFrame()
         # ticker info
         try:
-            df = yf.download(t, period="1mo", interval="5m", auto_adjust=True)
+            a_date = datetime.date.today()
+            days = datetime.timedelta(30)
+            new_date = a_date - days
+            print(f'starting yahoo api call for ticker {t}')
+            data = yf.download([t], start=new_date, interval="5m", auto_adjust=True)
+            print("yahoo cal made, returns:", data)
+            df = pd.DataFrame.from_dict(data)
+            print('dataframe made from dict: ', df)
+            df.reset_index(inplace=True)
+            print("index reset:", df)
+            df.loc[:,'Datetime'] = df['Datetime'].astype(str)
+            print('datetime updated:', df)
+            df.loc[:,'ticker'] = t
+            print('ticker added:', df)
+            df2 = df[df['Volume'] > 0]
+            load_from_df('price_history_tmp', df2.copy(deepcopy)) 
         except BaseException as err:
             print(f"Unexpected {err}, {type(err)} on {t} in load_price_history")
-            
-        df['ticker']= t
-        df.reset_index(inplace=True)
-        load_from_df('price_history_tmp', df)
+            print('  First row:', t)
+            continue
+
+        # this dump to csv cleans up some formatting problems
+        #fname = f'{time.time_ns()}_tmp.csv'
+        #df2.to_csv(fname, index=False)
+        #df = pd.read_csv(fname)           
+        
+        # os.remove(fname)
+        del df2
         del df
         gc.collect()
     
