@@ -1,5 +1,5 @@
 from copy import deepcopy
-import os, sys, json, gc
+import os, json, gc
 import datetime, time
 from datetime import date
 import pandas as pd
@@ -13,6 +13,8 @@ gc.enable()
 app = Flask(__name__)
 
 conn_string = os.environ.get("AZURE_CONN_STRING")
+# This avoids UnboundLocalError: local variable 'df' referenced before assignment
+df = pd.DataFrame()
 
 def connect_db():
     # Construct connection string
@@ -35,8 +37,8 @@ def load_from_df(sql_table_name, data: pd.DataFrame):
     '''Loads data to SQL server from dataframe
     '''
     if data.shape[0] ==0: return f"no data in df to load"
-    df = data.copy(deep=True)
-    df = df.fillna('0')
+    df2 = data.copy(deep=True)
+    df2 = df2.fillna('0')
 
     # create cursor and set fast execute property
     cursor = connect_db()
@@ -51,14 +53,14 @@ def load_from_df(sql_table_name, data: pd.DataFrame):
     col_list = str(row[0])
     col_list = col_list.split(",")
     print('  col_list:' + str(col_list))
-    print('  df columns:', df.columns.to_list())
+    print('  df columns:', df2.columns.to_list())
 
     # select columns from dataframe that are in the sql table
-    common_cols = set(col_list) & set(df.columns.to_list())
+    common_cols = set(col_list) & set(df2.columns.to_list())
     print('  COMMON COLS:', list(common_cols))
     col_count = len(common_cols)
-    df2 = df[list(common_cols)]
-    print('   First Row of Dataframe:', dict(df.iloc[0]))
+    df2 = df2[list(common_cols)]
+    print('   First Row of Dataframe:', dict(df2.iloc[0]))
 
     # vals is list of question marks for each column for insert stmnt
     vals = ('?,' *(col_count -1) ) + '?'
@@ -77,7 +79,7 @@ def load_from_df(sql_table_name, data: pd.DataFrame):
     finally:
         cursor.commit()
         cursor.close()
-        del df, df2
+        del df2
     gc.collect()
 
     return f'Completed loading {sql_table_name} ' + str(datetime.datetime.now())
@@ -140,6 +142,7 @@ def truncate_table(sql_table_name):
     cursor.execute(qry)
     row = cursor.fetchone()
     result = str(row[0])
+    cursor.close()
 
     print(f'  truncated table {sql_table_name}:' + str(result))
 
@@ -152,9 +155,11 @@ def hello_world():
 
 @app.route("/readme", methods=['GET'])
 def readme():
-    md_template_string = markdown.markdown(
-        open('README.md',mode='r').read(), extensions=["fenced_code"]
-    )
+    with open('README.md','r', encoding='utf-8') as f:
+        md_template_string = markdown.markdown(
+        f.read(), extensions=["fenced_code"]
+        )
+
     return md_template_string
 
 @app.route("/env")
@@ -193,6 +198,8 @@ def test_conn():
     # Insert some data into table
     cursor.execute("INSERT INTO inventory (name, quantity) VALUES (?,?);", ("banana", 150))
     results.append("Inserted {} row(s) of data.\n".format(cursor.rowcount))
+    cursor.commit()
+    cursor.close()
     return (str(results))
 
 @app.route("/load_ticker_info", methods=['GET'])
@@ -201,7 +208,6 @@ def load_ticker_info():
     args = request.args.to_dict()
     tickers = args.get("ticker").split("|")
     print("args:" + str(args))
-
     for t in tickers:
         # ticker info
         try:
@@ -235,7 +241,8 @@ def load_ticker_info():
 def load_price_history():
     # Get data from query strings
     args = request.args.to_dict()
-    tickers = args.get("ticker").split("|")
+    tickers = args.get("ticker").replace('load_price_history?ticker=','')
+    tickers = tickers.split("|")
     print("args:" + str(args))
     print("tickers:" + str(tickers))
 
@@ -252,33 +259,26 @@ def load_price_history():
             a_date = datetime.date.today()
             days = datetime.timedelta(30)
             new_date = a_date - days
-            print(f'starting yahoo api call for ticker {t}')
-            data = yf.download([t], start=new_date, interval="5m", auto_adjust=True)
-            print("yahoo cal made, returns:", data)
-            df = pd.DataFrame.from_dict(data)
-            print('dataframe made from dict: ', df)
-            df.reset_index(inplace=True)
-            print("index reset:", df)
-            df.loc[:,'Datetime'] = df['Datetime'].astype(str)
-            print('datetime updated:', df)
+            print(f'starting yahoo api call for ticker {t}\n')
+            global df
+            df = yf.download(t, group_by="Ticker", period="1mo",
+                threads=True, interval="5m", auto_adjust=True)
+            if df.shape[0] ==0:  
+                print(f"no data in df from yahoo")
+                continue
+            print("yahoo call made, returns:\n", str(df.head(1)))
             df.loc[:,'ticker'] = t
-            print('ticker added:', df)
-            df2 = df[df['Volume'] > 0]
-            load_from_df('price_history_tmp', df2.copy(deepcopy)) 
+            print('ticker added:\n', str(df.head(1)))
+            df.reset_index(inplace=True)
+            print("index reset:", str(df.head(1)))
+            df.loc[:,'Datetime'] = df['Datetime'].astype(str)
+            print('datetime updated:', str(df.head(1)))
+            df2 = df[df['Volume'] > 0].copy(deep=True)
+            load_from_df('price_history_tmp', df2) 
         except BaseException as err:
-            print(f"Unexpected {err}, {type(err)} on {t} in load_price_history")
-            print('  First row:', t)
+            print(f"Unexpected {err}, {type(err)}, {err.args} on {t} in load_price_history")
+            print('  First row of {t}:', str(err.with_traceback))
             continue
-
-        # this dump to csv cleans up some formatting problems
-        #fname = f'{time.time_ns()}_tmp.csv'
-        #df2.to_csv(fname, index=False)
-        #df = pd.read_csv(fname)           
-        
-        # os.remove(fname)
-        del df2
-        del df
-        gc.collect()
     
     merge_price_history(where_clause)
     delete_table('price_history_tmp', where_clause)

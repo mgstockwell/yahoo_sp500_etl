@@ -1,11 +1,6 @@
-Flask
-matplotlib
-scipy
-markdown
-gunicorn
+pandas
 yfinance
 pyodbc
-pandas
-getpass4
-matplotlib
-requests
+Flask
+markdown
+gunicorn
