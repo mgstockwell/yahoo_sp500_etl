@@ -1,6 +1,7 @@
 from copy import deepcopy
 import os, json, gc
 import datetime, time
+import sys
 from datetime import date
 import pandas as pd
 import yfinance as yf
@@ -13,8 +14,10 @@ gc.enable()
 app = Flask(__name__)
 
 conn_string = os.environ.get("AZURE_CONN_STRING")
-# This avoids UnboundLocalError: local variable 'df' referenced before assignment
-df = pd.DataFrame()
+
+# cloud run burps when there is a deprecation warning
+import warnings
+warnings.filterwarnings("ignore")
 
 def connect_db():
     # Construct connection string
@@ -186,7 +189,7 @@ def test_conn():
 
     # Drop previous table of same name if one exists
     cursor.execute("DROP TABLE IF EXISTS inventory;")
-    results.append("Finished dropping table (if existed).\n")
+    results.append(f"Finished dropping table (if existed).\n")
 
     # Create table
     cursor.execute("""CREATE TABLE inventory (
@@ -256,30 +259,27 @@ def load_price_history():
     for t in tickers:
         # ticker info
         try:
-            a_date = datetime.date.today()
-            days = datetime.timedelta(30)
-            new_date = a_date - days
             print(f'starting yahoo api call for ticker {t}\n')
-            global df
-            df = yf.download(t, group_by="Ticker", period="1mo",
-                threads=True, interval="5m", auto_adjust=True)
+            df = yf.download([t], period="1mo", interval="5m", auto_adjust=True, group_by="column")
             if df.shape[0] ==0:  
                 print(f"no data in df from yahoo")
                 continue
-            print("yahoo call made, returns:\n", str(df.head(1)))
-            df.loc[:,'ticker'] = t
-            print('ticker added:\n', str(df.head(1)))
-            df.reset_index(inplace=True)
-            print("index reset:", str(df.head(1)))
-            df.loc[:,'Datetime'] = df['Datetime'].astype(str)
-            print('datetime updated:', str(df.head(1)))
-            df2 = df[df['Volume'] > 0].copy(deep=True)
-            load_from_df('price_history_tmp', df2) 
+            print(df.head(1))
         except BaseException as err:
+            tb = sys.exc_info()[2]
             print(f"Unexpected {err}, {type(err)}, {err.args} on {t} in load_price_history")
-            print('  First row of {t}:', str(err.with_traceback))
+            print('  Exception on ticker {t}:', str(err.with_traceback(tb)))
             continue
-    
+
+        df.reset_index(inplace=True)
+        print("index reset:", str(df.head(1)))
+        df.loc[:,'Datetime'] = df['Datetime'].astype(str)
+        print('datetime updated:', str(df.head(1)))
+        df.loc[:,'ticker'] = t
+        print('ticker added:\n', str(df.head(1)))
+        df2 = df[df['Volume'] > 0].copy(deep=True)
+        load_from_df('price_history_tmp', df2) 
+        del df
     merge_price_history(where_clause)
     delete_table('price_history_tmp', where_clause)
 

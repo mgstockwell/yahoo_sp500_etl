@@ -1,6 +1,6 @@
 # Use the official lightweight Python image.
 # https://hub.docker.com/_/python
-FROM python:3.10
+FROM python:3.8.3
 
 # Allow statements and log messages to immediately appear in the Knative logs
 ENV PYTHONUNBUFFERED True
@@ -15,7 +15,7 @@ RUN pip install --upgrade pip
 RUN apt-get update
 #RUN apt-get upgrade -y
 RUN apt-get -y install libsasl2-dev gcc g++ python3-dev gnupg2 curl libiodbc2-dev
-RUN apt install unixodbc-dev --yes
+RUN apt-get install unixodbc-dev --yes
 RUN pip3 install --no-cache-dir -r requirements.txt
 #RUN wget http://archive.ubuntu.com/ubuntu/pool/main/g/glibc/multiarch-support_2.27-3ubuntu1.4_amd64.deb
 #RUN apt-get install ./multiarch-support_2.27-3ubuntu1.4_amd64.deb
