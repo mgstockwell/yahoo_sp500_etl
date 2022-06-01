@@ -5,3 +5,4 @@ Flask
 markdown
 gunicorn
 requests
+google-python-cloud-debugger
