@@ -1,7 +1,7 @@
 from copy import deepcopy
 import os, json, gc
 import datetime, time
-import sys
+import sys, traceback
 from datetime import date
 import pandas as pd
 import yfinance as yf
@@ -257,18 +257,20 @@ def load_price_history():
     # some options here https://stackoverflow.com/questions/63107594/
     # how-to-deal-with-multi-level-column-names-downloaded-with-yfinance/63107801#63107801
     for t in tickers:
-        # ticker info
+        df = pd.DataFrame(columns = ['Open', 'High', 'Low', 'Close', 'Volume', 'ticker'],
+                            index = ['Datetime'])
+        # price history info
         try:
             print(f'starting yahoo api call for ticker {t}\n')
-            df = yf.download([t], period="1mo", interval="5m", auto_adjust=True, group_by="column")
+            df = yf.download([str(t)], period="1mo", interval="5m", auto_adjust=True, group_by="column", progress=False)
             if df.shape[0] ==0:  
-                print(f"no data in df from yahoo")
+                print(f"no data in df from yahoo for {t}")
                 continue
             print(df.head(1))
         except BaseException as err:
             tb = sys.exc_info()[2]
             print(f"Unexpected {err}, {type(err)}, {err.args} on {t} in load_price_history")
-            print('  Exception on ticker {t}:', str(err.with_traceback(tb)))
+            print(f'  Exception on ticker {t}:', traceback.format_exc())
             continue
 
         df.reset_index(inplace=True)
@@ -279,9 +281,10 @@ def load_price_history():
         print('ticker added:\n', str(df.head(1)))
         df2 = df[df['Volume'] > 0].copy(deep=True)
         load_from_df('price_history_tmp', df2) 
+        time.sleep(0.5)
         del df
-    merge_price_history(where_clause)
-    delete_table('price_history_tmp', where_clause)
+        merge_price_history(where_clause)
+        delete_table('price_history_tmp', where_clause)
 
     gc.collect()
     return '\nFinished ' + str(args) + ' at ' + str(datetime.datetime.now())
