@@ -11,7 +11,7 @@ WORKDIR $APP_HOME
 COPY . ./
 
 # Install production dependencies.
-RUN pip install --upgrade pip
+RUN pip3 install --upgrade pip
 RUN apt-get update
 #RUN apt-get upgrade -y
 RUN apt-get -y install libsasl2-dev gcc g++ python3-dev gnupg2 curl libiodbc2-dev

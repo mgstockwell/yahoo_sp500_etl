@@ -7,6 +7,7 @@ import pandas as pd
 import yfinance as yf
 import pyodbc
 import markdown
+import random
 from flask import Flask, Response, request
 
 gc.enable()
@@ -262,15 +263,15 @@ def load_price_history():
         # price history info
         try:
             print(f'starting yahoo api call for ticker {t}\n')
-            df = yf.download([str(t)], period="1mo", interval="5m", auto_adjust=True, group_by="column", progress=False)
+            df = yf.download(str(t), period="5d", interval="5m", auto_adjust=True, 
+                    group_by="column", progress=False, threads=1)
             if df.shape[0] ==0:  
                 print(f"no data in df from yahoo for {t}")
                 continue
             print(df.head(1))
-        except BaseException as err:
-            tb = sys.exc_info()[2]
-            print(f"Unexpected {err}, {type(err)}, {err.args} on {t} in load_price_history")
+        except Exception:
             print(f'  Exception on ticker {t}:', traceback.format_exc())
+            del df
             continue
 
         df.reset_index(inplace=True)
@@ -281,7 +282,8 @@ def load_price_history():
         print('ticker added:\n', str(df.head(1)))
         df2 = df[df['Volume'] > 0].copy(deep=True)
         load_from_df('price_history_tmp', df2) 
-        time.sleep(0.5)
+        # getting <class 'KeyError'>, ('AVGO',)  when many jobs running together. this solves it... poorly
+        time.sleep(random.random() + 0.1)
         del df
         merge_price_history(where_clause)
         delete_table('price_history_tmp', where_clause)
