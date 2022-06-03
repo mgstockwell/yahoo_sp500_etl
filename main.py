@@ -263,7 +263,7 @@ def load_price_history():
         # price history info
         try:
             print(f'starting yahoo api call for ticker {t}\n')
-            df = yf.download(str(t), period="5d", interval="5m", auto_adjust=True, 
+            df = yf.download(f" {t} ", period="5d", interval="5m", auto_adjust=True, 
                     group_by="column", progress=False, threads=1)
             if df.shape[0] ==0:  
                 print(f"no data in df from yahoo for {t}")
