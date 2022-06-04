@@ -284,7 +284,7 @@ def load_price_history():
         load_from_df('price_history_tmp', df2) 
         # getting <class 'KeyError'>, ('AVGO',)  when many jobs running together. this solves it... poorly
         time.sleep(random.random() + 0.1)
-        del df
+        del df, df2
         merge_price_history(where_clause)
         delete_table('price_history_tmp', where_clause)
 
